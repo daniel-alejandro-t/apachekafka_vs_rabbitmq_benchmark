@@ -1,0 +1,2 @@
+Rate,MessagesSent,Failures,DurationSeconds,SendRate,RequestLatencyP50,RequestLatencyP95,RequestLatencyP99,BatchSizeAvg,RecordsPerRequestAvg,IncomingByteRate,OutgoingByteRate,RequestsInFlight
+100,500,0,5.00,99.80,1.00,1.00,14.88,1102.00,1.00,6103.40,114489.00,0

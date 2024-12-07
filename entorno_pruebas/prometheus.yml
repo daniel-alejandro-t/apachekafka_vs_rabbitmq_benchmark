@@ -1,0 +1,11 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'kafka-client'
+    static_configs:
+      - targets: ['kafkawithkraft-kafka_exporter-1:9308']
+
+  - job_name: 'rabbitmq-client'
+    static_configs:
+      - targets: ['kafkawithkraft-rabbitmq-1:15692']

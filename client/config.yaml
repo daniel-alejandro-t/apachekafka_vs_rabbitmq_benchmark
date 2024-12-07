@@ -1,0 +1,16 @@
+---
+port: 9090
+test:
+  requestDelayMs: 10
+rabbitmq:
+  user: daniel
+  password: daniel
+  queue: devices
+  port: 5672
+  streamsPort: 5552
+  host: localhost
+kafka:
+  version: 3.8.0
+  topic: devices
+  group: my-consumer-group
+  host: localhost:9092

@@ -1,0 +1,103 @@
+networks:
+  utpl:
+    driver: bridge
+
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    hostname: my-rabbit
+    environment:
+      RABBITMQ_DEFAULT_USER: daniel
+      RABBITMQ_DEFAULT_PASS: daniel
+    ports:
+      - "8080:15672"    # Interfaz de administración de RabbitMQ
+      - "5672:5672"     # Puerto AMQP
+      - "15691:15691"   # Exposición de métricas para Prometheus
+    networks:
+      - utpl
+    command: >
+      sh -c "rabbitmq-plugins enable rabbitmq_web_stomp && rabbitmq-server"
+    mem_limit: 750m
+    cpus: 2.0
+    volumes:
+    - /var/lib/rabbitmq # Monta un volumen anónimo que se elimina
+
+  broker:
+    image: confluentinc/confluent-local:latest
+    hostname: broker
+    container_name: broker
+    ports:
+      - "9092:9092"
+    networks:
+      - utpl
+    environment:
+      KAFKA_LISTENERS: 'PLAINTEXT://0.0.0.0:9092,PLAINTEXT_INTERNAL://broker:9094,CONTROLLER://0.0.0.0:9093'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://broker:9094'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@localhost:9093'
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_NODE_ID: '1'
+      KAFKA_REST_BOOTSTRAP_SERVERS: 'PLAINTEXT://0.0.0.0:9092'
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server=broker:9094"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    mem_limit: 750m
+    cpus: 2.0	
+    volumes:
+      - /var/lib/kafka/data # Usa un volumen anónimo que se eliminará al reiniciar
+
+  kafka_exporter:
+    image: danielqsj/kafka-exporter:latest
+    command: ["--kafka.server=broker:9094"]
+    ports:
+      - "9308:9308"
+    networks:
+      - utpl
+    depends_on:
+      broker:
+        condition: service_healthy
+    
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    ports:
+      - "9999:8080"
+    networks:
+      - utpl
+    environment:
+      DYNAMIC_CONFIG_ENABLED: 'true'
+      KAFKA_CLUSTERS_0_NAME: 'local'
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: 'broker:9094'
+    depends_on:
+      broker:
+        condition: service_healthy
+        
+  prometheus:
+    image: prom/prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    networks:
+      - utpl
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"  # Exposición del puerto 3000 para la interfaz web de Grafana
+    networks:
+      - utpl
+    depends_on:
+      - prometheus
+    environment:
+      - GF_SECURITY_ADMIN_USER=daniel  # Usuario administrador por defecto
+      - GF_SECURITY_ADMIN_PASSWORD=daniel  # Contraseña del administrador
+    volumes:
+      - grafana_data:/var/lib/grafana  # Persistencia de datos
+      
+volumes:
+  grafana_data:
+
