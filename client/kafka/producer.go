@@ -31,7 +31,13 @@ func StartProducer(cfg *utils.Config, hostname string) {
 	producer, config, startTime := initializeProducer(cfg)
 	defer closeProducer(producer)
 
-	outputFile, writer := setupReportFile("kafka_producer_report.csv")
+	params := getBenchmarkParameters()
+
+	// El nombre del archivo debe tener las caracterísitcas del test realizado, extraido de params
+	name_file_with_params := fmt.Sprintf("kafka_producer_report-rate:%d-maxRate:%d-increment:%d-testDuration:%s-messageSize:%d.csv",
+		params.rate, params.maxRate, params.increment, params.testDuration, params.messageSize)
+
+	outputFile, writer := setupReportFile(name_file_with_params)
 	defer finalizeReportFile(outputFile, writer)
 
 	runBenchmark(cfg, hostname, producer, config, startTime, writer)
@@ -70,7 +76,7 @@ func closeProducer(producer sarama.AsyncProducer) {
 
 // setupReportFile configura el archivo CSV para registrar el informe.
 func setupReportFile(fileName string) (*os.File, *csv.Writer) {
-	outputFile, err := os.Create(fileName)
+	outputFile, err := os.Create("/output/" + fileName)
 	utils.Fail(err, "No se pudo crear el archivo de reporte")
 
 	writer := csv.NewWriter(outputFile)
@@ -81,8 +87,6 @@ func setupReportFile(fileName string) (*os.File, *csv.Writer) {
 		"BatchSizeAvg", "RecordsPerRequestAvg", "IncomingByteRate", "OutgoingByteRate", "RequestsInFlight",
 	}
 	writer.Write(headers)
-
-	// writer.Write([]string{"Tasa (msg/s)", "Mensajes enviados", "Fallos", "Tiempo transcurrido (s)"})
 
 	return outputFile, writer
 }

@@ -32,7 +32,7 @@ type MetricsData struct {
 }
 
 // StartProducer inicia el productor de RabbitMQ con incrementos progresivos en la tasa de mensajes.
-func StartProducer(cfg *utils.Config, hostname string) {
+func StartProducer(cfg *utils.Config, hostname string, MetricsData MetricsData) {
 	conn, ch, queueName := initializeProducer(cfg, hostname)
 	defer closeProducer(conn, ch)
 
@@ -40,7 +40,13 @@ func StartProducer(cfg *utils.Config, hostname string) {
 		"Rate", "MessagesSent", "Failures", "ElapsedTime",
 	}
 
-	outputFile, writer := utils.SetupReportFile("rabbitmq_producer_report.csv", headers)
+	params := getBenchmarkParameters()
+
+	// El nombre del archivo debe tener las caracterísitcas del test realizado, extraido de params
+	name_file_with_params := fmt.Sprintf("rabbitmq_producer_report-rate:%d-maxRate:%d-increment:%d-testDuration:%s-messageSize:%d.csv",
+		params.rate, params.maxRate, params.increment, params.testDuration, params.messageSize)
+
+	outputFile, writer := utils.SetupReportFile(name_file_with_params, headers)
 	defer finalizeReportFile(outputFile, writer)
 
 	runBenchmark(cfg, hostname, ch, queueName, writer)
