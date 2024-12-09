@@ -92,12 +92,29 @@ type MetricsData struct {
 
 // SetupReportFile configura el archivo CSV para registrar el informe.
 func SetupReportFile(fileName string, headers []string) (*os.File, *csv.Writer) {
-	outputFile, err := os.Create(fileName)
+	// Obtén el directorio de trabajo actual
+	baseDir, err := os.Getwd()
+	Fail(err, "No se pudo obtener el directorio de trabajo actual")
+
+	// Define la ruta completa de la carpeta output
+	outputDir := fmt.Sprintf("%s/output", baseDir)
+
+	// Crea la carpeta output si no existe
+	err = os.MkdirAll(outputDir, os.ModePerm)
+	Fail(err, "No se pudo crear la carpeta output")
+
+	// Define la ruta completa del archivo
+	filePath := fmt.Sprintf("%s/%s", outputDir, fileName)
+
+	// Crea el archivo en la ruta especificada
+	outputFile, err := os.Create(filePath)
 	Fail(err, "No se pudo crear el archivo de reporte")
 
+	// Configura el escritor CSV
 	writer := csv.NewWriter(outputFile)
-	writer.Write(headers)
-	writer.Flush()
+
+	err = writer.Write(headers)
+	Fail(err, "No se pudieron escribir los encabezados en el archivo de reporte")
 
 	return outputFile, writer
 }

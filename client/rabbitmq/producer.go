@@ -32,7 +32,7 @@ type MetricsData struct {
 }
 
 // StartProducer inicia el productor de RabbitMQ con incrementos progresivos en la tasa de mensajes.
-func StartProducer(cfg *utils.Config, hostname string, MetricsData MetricsData) {
+func StartProducer(cfg *utils.Config, hostname string) {
 	conn, ch, queueName := initializeProducer(cfg, hostname)
 	defer closeProducer(conn, ch)
 
@@ -83,23 +83,6 @@ func closeProducer(conn *amqp.Connection, ch *amqp.Channel) {
 	if err := conn.Close(); err != nil {
 		utils.Warning(err, "Error closing connection")
 	}
-}
-
-// setupReportFile configura el archivo CSV para registrar el informe.
-func setupReportFile(fileName string) (*os.File, *csv.Writer) {
-	outputFile, err := os.Create(fileName)
-	utils.Fail(err, "No se pudo crear el archivo de reporte")
-
-	writer := csv.NewWriter(outputFile)
-
-	headers := []string{
-		"Rate", "MessagesSent", "Failures", "ElapsedTime",
-		// TODO Aqui se deben agregar los encabezados adecuados, equivalentes a las métricas de kafka
-	}
-	writer.Write(headers)
-	writer.Flush()
-
-	return outputFile, writer
 }
 
 // finalizeReportFile guarda los cambios y cierra el archivo CSV.
