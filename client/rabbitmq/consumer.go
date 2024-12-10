@@ -103,7 +103,7 @@ func runConsumerBenchmark(cfg *utils.Config, hostname string, ch *amqp.Channel, 
 func calculateTotalDuration(params utils.BenchmarkParameters) time.Duration {
 	var totalDuration time.Duration
 	rate := params.Rate
-	for rate <= params.MaxRate {
+	for {
 		totalDuration += params.TestDuration
 		rate += params.Increment
 		// Si deseas agregar un tiempo de espera entre pruebas, inclúyelo aquí

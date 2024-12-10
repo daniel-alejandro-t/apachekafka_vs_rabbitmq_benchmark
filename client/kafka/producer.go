@@ -34,8 +34,8 @@ func StartProducer(cfg *utils.Config, hostname string) {
 	params := getBenchmarkParameters()
 
 	// El nombre del archivo debe tener las caracterísitcas del test realizado, extraido de params
-	name_file_with_params := fmt.Sprintf("kafka_producer_report-rate:%d-maxRate:%d-increment:%d-testDuration:%s-messageSize:%d.csv",
-		params.rate, params.maxRate, params.increment, params.testDuration, params.messageSize)
+	name_file_with_params := fmt.Sprintf("kafka_producer_report-rate:%d-increment:%d-testDuration:%s-messageSize:%d.csv",
+		params.rate, params.increment, params.testDuration, params.messageSize)
 
 	headers := []string{
 		"Rate", "MessagesSent", "Failures", "DurationSeconds",
@@ -89,7 +89,6 @@ func finalizeReportFile(outputFile *os.File, writer *csv.Writer) {
 // BenchmarkParameters contiene los parámetros para las pruebas de benchmark
 type BenchmarkParameters struct {
 	rate         int64
-	maxRate      int64
 	increment    int64
 	testDuration time.Duration
 	messageSize  int
@@ -100,7 +99,6 @@ type BenchmarkParameters struct {
 func getBenchmarkParameters() BenchmarkParameters {
 	var (
 		rate         int64 = 100             // Tasa inicial predeterminada
-		maxRate      int64 = 99000000        // Tasa máxima predeterminada
 		increment    int64 = 100             // Incremento predeterminado
 		testDuration       = 5 * time.Second // Duración predeterminada del ciclo
 		messageSize  int   = 1024            // Tamaño predeterminado del mensaje en bytes
@@ -111,14 +109,6 @@ func getBenchmarkParameters() BenchmarkParameters {
 			rate = parsedVal
 		} else {
 			fmt.Printf("Valor inválido para kafka_rate: %s\n", val)
-		}
-	}
-
-	if val, exists := os.LookupEnv("kafka_maxRate"); exists {
-		if parsedVal, err := strconv.ParseInt(val, 10, 64); err == nil {
-			maxRate = parsedVal
-		} else {
-			fmt.Printf("Valor inválido para kafka_maxRate: %s\n", val)
 		}
 	}
 
@@ -148,7 +138,6 @@ func getBenchmarkParameters() BenchmarkParameters {
 
 	return BenchmarkParameters{
 		rate:         rate,
-		maxRate:      maxRate,
 		increment:    increment,
 		testDuration: testDuration,
 		messageSize:  messageSize,
@@ -161,8 +150,11 @@ func runBenchmark(cfg *utils.Config, hostname string, producer sarama.AsyncProdu
 	// Obtener los parámetros del benchmark
 	params := getBenchmarkParameters()
 
+	// Impresión en consola de las métricas disponibles
+	// listAllMetrics(config.MetricRegistry)
+
 	rate := params.rate
-	for rate <= params.maxRate {
+	for {
 		// Ejecutar el ciclo de prueba
 		messagesSent, failures := performTestCycle(
 			cfg, hostname, producer, rate, params.testDuration, &totalAckLatency, params.messageSize,
@@ -170,9 +162,6 @@ func runBenchmark(cfg *utils.Config, hostname string, producer sarama.AsyncProdu
 
 		// Recopilar las métricas después del ciclo
 		metricsData := collectMetrics(config.MetricRegistry, cfg)
-
-		// Impresión en consola de las métricas disponibles
-		// listAllMetrics(config.MetricRegistry)
 
 		// Registrar las métricas
 		logAndRecordMetricsWithLatencyAndMetricsData(rate, messagesSent, failures, params.testDuration.Seconds(), metricsData, writer)

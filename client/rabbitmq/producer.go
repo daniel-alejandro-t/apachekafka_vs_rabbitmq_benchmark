@@ -16,7 +16,6 @@ import (
 // BenchmarkParameters contiene los parámetros para las pruebas de benchmark
 type BenchmarkParameters struct {
 	rate         int64
-	maxRate      int64
 	increment    int64
 	testDuration time.Duration
 	messageSize  int
@@ -43,8 +42,8 @@ func StartProducer(cfg *utils.Config, hostname string) {
 	params := getBenchmarkParameters()
 
 	// El nombre del archivo debe tener las caracterísitcas del test realizado, extraido de params
-	name_file_with_params := fmt.Sprintf("rabbitmq_producer_report-rate:%d-maxRate:%d-increment:%d-testDuration:%s-messageSize:%d.csv",
-		params.rate, params.maxRate, params.increment, params.testDuration, params.messageSize)
+	name_file_with_params := fmt.Sprintf("rabbitmq_producer_report-rate:%d-increment:%d-testDuration:%s-messageSize:%d.csv",
+		params.rate, params.increment, params.testDuration, params.messageSize)
 
 	outputFile, writer := utils.SetupReportFile(name_file_with_params, headers)
 	defer finalizeReportFile(outputFile, writer)
@@ -96,7 +95,6 @@ func finalizeReportFile(outputFile *os.File, writer *csv.Writer) {
 func getBenchmarkParameters() BenchmarkParameters {
 	var (
 		rate         int64 = 1000            // Tasa inicial predeterminada
-		maxRate      int64 = 1000000         // Tasa máxima predeterminada
 		increment    int64 = 100             // Incremento predeterminado
 		testDuration       = 5 * time.Second // Duración predeterminada del ciclo
 		messageSize  int   = 1024            // Tamaño predeterminado del mensaje en bytes
@@ -107,14 +105,6 @@ func getBenchmarkParameters() BenchmarkParameters {
 			rate = parsedVal
 		} else {
 			fmt.Printf("Valor inválido para rabbitmq_rate: %s\n", val)
-		}
-	}
-
-	if val, exists := os.LookupEnv("rabbitmq_maxRate"); exists {
-		if parsedVal, err := strconv.ParseInt(val, 10, 64); err == nil {
-			maxRate = parsedVal
-		} else {
-			fmt.Printf("Valor inválido para rabbitmq_maxRate: %s\n", val)
 		}
 	}
 
@@ -144,7 +134,6 @@ func getBenchmarkParameters() BenchmarkParameters {
 
 	return BenchmarkParameters{
 		rate:         rate,
-		maxRate:      maxRate,
 		increment:    increment,
 		testDuration: testDuration,
 		messageSize:  messageSize,
@@ -157,7 +146,7 @@ func runBenchmark(cfg *utils.Config, hostname string, ch *amqp.Channel, queueNam
 	params := getBenchmarkParameters()
 
 	rate := params.rate
-	for rate <= params.maxRate {
+	for {
 		// Ejecutar el ciclo de prueba
 		messagesSent, failures := performTestCycle(cfg, hostname, ch, queueName, rate, params.testDuration, params.messageSize)
 
@@ -183,7 +172,7 @@ func runBenchmark(cfg *utils.Config, hostname string, ch *amqp.Channel, queueNam
 			break
 		}
 
-		fmt.Print("Esperando 5 segundos para la siguiente prueba...\n")
+		fmt.Print("Esperando " + fmt.Sprintf("%.2f", elapsedTime) + " segundos para la siguiente prueba...\n")
 
 		rate += params.increment
 	}

@@ -489,14 +489,12 @@ Antes de ejecutar el cliente principal, asegúrate de que todos los sistemas ant
    export CLIENT=kafka       # Puede ser "kafka", "rabbitmq"
    # Configuración para Kafka
    export kafka_rate=10000
-   export kafka_maxRate=999000
    export kafka_increment=1000
    export kafka_testDuration=2
    export kafka_messageSize=10240
    
    # Configuración para RabbitMQ
    export rabbitmq_rate=10000
-   export rabbitmq_maxRate=999000
    export rabbitmq_increment=1000
    export rabbitmq_testDuration=2
    export rabbitmq_messageSize=10240

@@ -72,7 +72,6 @@ func Fail(err error, format string, args ...any) {
 // BenchmarkParameters contiene los parámetros para las pruebas de benchmark
 type BenchmarkParameters struct {
 	Rate         int64
-	MaxRate      int64
 	Increment    int64
 	TestDuration time.Duration
 	MessageSize  int
@@ -87,7 +86,7 @@ type MetricsData struct {
 	TotalLatency     float64
 	AvgLatency       float64
 	MessagesReceived int64
-	// Agrega más campos si deseas recopilar más métricas
+	// Agregar mas métricas
 }
 
 // SetupReportFile configura el archivo CSV para registrar el informe.
@@ -139,7 +138,6 @@ func GenerateMessage(size int) []byte {
 func GetBenchmarkParameters(prefix string) BenchmarkParameters {
 	var (
 		rate         int64 = 100             // Tasa inicial predeterminada
-		maxRate      int64 = 1000000         // Tasa máxima predeterminada
 		increment    int64 = 100             // Incremento predeterminado
 		testDuration       = 5 * time.Second // Duración predeterminada del ciclo
 		messageSize  int   = 1024            // Tamaño predeterminado del mensaje en bytes
@@ -150,14 +148,6 @@ func GetBenchmarkParameters(prefix string) BenchmarkParameters {
 			rate = parsedVal
 		} else {
 			fmt.Printf("Valor inválido para %srate: %s\n", prefix, val)
-		}
-	}
-
-	if val, exists := os.LookupEnv(prefix + "maxRate"); exists {
-		if parsedVal, err := strconv.ParseInt(val, 10, 64); err == nil {
-			maxRate = parsedVal
-		} else {
-			fmt.Printf("Valor inválido para %smaxRate: %s\n", prefix, val)
 		}
 	}
 
@@ -187,7 +177,6 @@ func GetBenchmarkParameters(prefix string) BenchmarkParameters {
 
 	return BenchmarkParameters{
 		Rate:         rate,
-		MaxRate:      maxRate,
 		Increment:    increment,
 		TestDuration: testDuration,
 		MessageSize:  messageSize,

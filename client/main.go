@@ -80,6 +80,7 @@ func runKafkaTest(cfg *utils.Config, hostname string) {
 	kafka.StartProducer(cfg, hostname)
 }
 
+// FIXME Se detiene - ch.Publish failed: Exception (504) Reason: "channel/connection is not open"
 func runRabbitMQTest(cfg *utils.Config, hostname string) {
 	defer func() {
 		if r := recover(); r != nil {
