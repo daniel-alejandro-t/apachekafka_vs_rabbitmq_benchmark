@@ -158,17 +158,25 @@ end
 
 ## Tabla de Contenidos
 
-1. [Estructura del Proyecto](#estructura-del-proyecto)
-2. [Requisitos Previos](#requisitos-previos)
-3. [Configuración](#configuración)
-4. [Ejecución del Software](#ejecución-del-software)
-5. [Componentes](#componentes)
-   - [Directorio `client`](#directorio-client)
-   - [Directorio `monitoring`](#directorio-monitoring)
-   - [Directorio `test`](#directorio-test)
-6. [Métricas y Monitoreo](#métricas-y-monitoreo)
-7. [Resolución de Problemas](#resolución-de-problemas)
-8. [Contribuciones](#contribuciones)
+- [Proyecto de Pruebas de Rendimiento para Apache Kafka y RabbitMQ](#proyecto-de-pruebas-de-rendimiento-para-apache-kafka-y-rabbitmq)
+  - [Tabla de Contenidos](#tabla-de-contenidos)
+  - [Estructura del Proyecto](#estructura-del-proyecto)
+  - [Requisitos Previos](#requisitos-previos)
+  - [Componentes](#componentes)
+    - [Directorio `client`](#directorio-client)
+    - [Directorio `monitoring`](#directorio-monitoring)
+    - [Directorio `test`](#directorio-test)
+  - [Métricas y Monitoreo](#métricas-y-monitoreo)
+    - [Ejemplo de Métricas Recolectadas](#ejemplo-de-métricas-recolectadas)
+  - [Resolución de Problemas](#resolución-de-problemas)
+  - [Ejecución](#ejecución)
+    - [Sistemas Involucrados](#sistemas-involucrados)
+    - [Orden de Ejecución de los Sistemas](#orden-de-ejecución-de-los-sistemas)
+    - [Paso 1: Iniciar docker-compose](#paso-1-iniciar-docker-compose)
+    - [Paso 2: Configurar y Ejecutar el Cliente (Producer y Consumer)](#paso-2-configurar-y-ejecutar-el-cliente-producer-y-consumer)
+    - [Resumen de la Ejecución en Orden](#resumen-de-la-ejecución-en-orden)
+  - [Contribuciones](#contribuciones)
+    - [Créditos al autor orginal](#créditos-al-autor-orginal)
 
 ---
 
@@ -201,66 +209,6 @@ El proyecto contiene los siguientes directorios y archivos clave:
 1. **Docker**: Asegúrate de que Docker esté instalado y en funcionamiento.
 2. **Go**: Versión 1.20 o superior para compilar y ejecutar el cliente.
 3. **Protocolo de Mensajería**: Apache Kafka y RabbitMQ deben estar instalados y configurados. Estos servicios se pueden ejecutar en contenedores Docker o en tu entorno local.
-
-## Configuración
-
-### Variables de Entorno
-
-Antes de ejecutar el proyecto, establece las siguientes variables de entorno:
-
-- `CLIENT`: Define el protocolo de mensajería a utilizar (`kafka`, `rabbitmq`, `rabbitmq-streams`).
-- `HOSTNAME`: Nombre del host o IP donde están ejecutándose los servicios de Kafka o RabbitMQ.
-
-### Archivos de Configuración
-
-1. **`client/config.yaml`**: Configuración general para el cliente, incluyendo puertos, detalles de conexión, y nombres de tópicos o colas.
-2. **`kafka.properties`** y **`rabbitmq-env.conf`**: Configuraciones para los servicios de Kafka y RabbitMQ.
-
-Ejemplo de `config.yaml`:
-
-```yaml
-port: 8081
-test:
-  requestDelayMs: 10
-rabbitmq:
-  user: username
-  password: password
-  queue: devices
-  port: 5672
-  host: broker-host
-kafka:
-  version: 3.7.1
-  topic: benchmark_topic
-  group: my-consumer-group
-  host: broker-host:9092
-```
-
-## Ejecución del Software
-
-### Construir la Imagen Docker del Cliente
-
-El Dockerfile en `client/Dockerfile` permite construir la imagen para el cliente. Desde el directorio `client`, ejecuta:
-
-```bash
-docker build -t my-client-image .
-```
-
-### Ejecutar el Cliente de Pruebas
-
-Puedes ejecutar el cliente en un contenedor Docker o directamente en tu máquina local.
-
-#### Opción 1: Ejecución en Docker
-
-```bash
-docker run --rm -e CLIENT=kafka -e HOSTNAME=localhost -v "$(pwd)/config.yaml:/app/config.yaml" my-client-image
-```
-
-#### Opción 2: Ejecución Local
-
-```bash
-cd client/
-go run main.go
-```
 
 ## Componentes
 
@@ -308,12 +256,6 @@ Estas métricas pueden ser visualizadas en Prometheus o Grafana.
 2. **Problemas con Docker**: Asegúrate de que Docker esté ejecutándose y que no haya conflictos de red.
 3. **Compilación de Protobuf**: Si realizas cambios en `hardware/device.proto`, regenera los archivos Go usando `protoc`.
 
-## Contribuciones
-
-1. Haz un fork de este repositorio.
-2. Crea una nueva rama (`feature/nueva-funcionalidad`).
-3. Realiza los cambios y crea un pull request.
-
 ## Ejecución
 
 Para ejecutar correctamente el proyecto, es importante seguir un orden específico para iniciar cada sistema y servicio que participa en la prueba de benchmarking. A continuación, se describe cada sistema involucrado, su propósito en la arquitectura y las instrucciones para ejecutarlos en el orden adecuado.
@@ -328,196 +270,56 @@ Para ejecutar correctamente el proyecto, es importante seguir un orden específi
 
 ### Orden de Ejecución de los Sistemas
 
-Sigue los pasos detallados a continuación para iniciar cada sistema en el orden correcto.
+Sigue los pasos detallados a continuación para iniciar cada sistema.
 
 ---
 
-### Paso 1: Iniciar Kafka con KRaft
+### Paso 1: Iniciar docker-compose
 
-1. Asegúrate de que Kafka esté configurado para usar KRaft y no Zookeeper. La configuración necesaria se encuentra en el archivo `kafka.properties`.
-2. Si tienes Docker, crea un contenedor de Kafka usando el siguiente comando (asumiendo que tienes un `docker-compose.yml` configurado):
+1. Asegúrese que se encuentra en el directorio `entorno-pruebas`.
+2. Ejecute el siguiente comando para iniciar la orquestación de los servicios:
 
-   ```yaml
-   version: '3.8'
+  ```bash
+    docker-compose up -d
+  ```
 
-   services:
-     kafka:
-       image: confluentinc/confluent-local:latest
-       environment:
-         KAFKA_BROKER_ID: 1
-         KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
-         KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
-         KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
-         KAFKA_PROCESS_ROLES: broker,controller
-         KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
-         KAFKA_NODE_ID: 1
-       ports:
-         - "9092:9092"
-   ```
-
-3. Ejecuta el contenedor con `docker-compose`:
-
-   ```bash
-   docker-compose up -d kafka
-   ```
-
-4. Asegúrate de que Kafka esté corriendo y que el puerto `9092` esté accesible para el cliente.
-
----
-
-### Paso 2: Iniciar RabbitMQ
-
-1. Inicia un contenedor de RabbitMQ con la imagen `rabbitmq:3-management` para incluir la interfaz de administración en el puerto `15672`:
-
-   ```yaml
-   services:
-     rabbitmq:
-       image: rabbitmq:3-management
-       environment:
-         RABBITMQ_DEFAULT_USER: usuario
-         RABBITMQ_DEFAULT_PASS: contraseña
-       ports:
-         - "5672:5672"   # Puerto AMQP para clientes
-         - "15672:15672" # Puerto de administración
-   ```
-
-2. Ejecuta el contenedor:
-
-   ```bash
-   docker-compose up -d rabbitmq
-   ```
-
-3. Confirma que RabbitMQ está activo y accesible en los puertos `5672` y `15672`.
-
----
-
-### Paso 3: Iniciar Kafka Exporter
-
-1. Inicia el contenedor de Kafka Exporter para exponer las métricas de Kafka a través del puerto `9308`:
-
-   ```yaml
-   services:
-     kafka_exporter:
-       image: danielqsj/kafka-exporter:latest
-       environment:
-         KAFKA_SERVER: "kafka:9092"
-       ports:
-         - "9308:9308"
-       depends_on:
-         - kafka
-   ```
-
-2. Ejecuta Kafka Exporter:
-
-   ```bash
-   docker-compose up -d kafka_exporter
-   ```
-
-3. Asegúrate de que el puerto `9308` esté accesible para Prometheus.
-
----
-
-### Paso 4: Iniciar RabbitMQ Exporter
-
-1. Inicia el contenedor de RabbitMQ Exporter para recopilar métricas del sistema RabbitMQ y exponerlas en el puerto `9419`:
-
-   ```yaml
-   services:
-     rabbitmq_exporter:
-       image: kbudde/rabbitmq-exporter:latest
-       environment:
-         RABBITMQ_DEFAULT_USER: usuario
-         RABBITMQ_DEFAULT_PASS: contraseña
-         RABBITMQ_URL: "http://rabbitmq:15672"
-       ports:
-         - "9419:9419"
-       depends_on:
-         - rabbitmq
-   ```
-
-2. Ejecuta RabbitMQ Exporter:
-
-   ```bash
-   docker-compose up -d rabbitmq_exporter
-   ```
-
-3. Confirma que el puerto `9419` esté accesible para Prometheus.
-
----
-
-### Paso 5: Iniciar Prometheus
-
-1. Configura Prometheus para recolectar métricas de Kafka Exporter, RabbitMQ Exporter y los clientes. Agrega el siguiente `scrape_config` en el archivo de configuración de Prometheus:
-
-   ```yaml
-   scrape_configs:
-     - job_name: 'benchmark-client'
-       static_configs:
-         - targets: ['localhost:8081']  # Clientes Producer y Consumer
-
-     - job_name: 'kafka-exporter'
-       static_configs:
-         - targets: ['localhost:9308'] # Kafka Exporter
-
-     - job_name: 'rabbitmq-exporter'
-       static_configs:
-         - targets: ['localhost:9419'] # RabbitMQ Exporter
-   ```
-
-2. Inicia Prometheus (si está en un contenedor, asegúrate de que el archivo de configuración esté correctamente montado):
-
-   ```bash
-   docker run -d --name prometheus \
-     -p 9090:9090 \
-     -v /path/to/prometheus.yml:/etc/prometheus/prometheus.yml \
-     prom/prometheus
-   ```
-
-3. Verifica que Prometheus esté activo y listo para recopilar métricas en el puerto `9090`.
-
----
-
-### Paso 6: Configurar y Ejecutar el Cliente (Producer y Consumer)
+### Paso 2: Configurar y Ejecutar el Cliente (Producer y Consumer)
 
 Antes de ejecutar el cliente principal, asegúrate de que todos los sistemas anteriores estén en ejecución. Luego sigue estos pasos para iniciar el cliente:
 
 1. **Configurar Variables de Entorno**:
    
-   Asegúrate de que las siguientes variables de entorno estén configuradas según el tipo de cliente que deseas probar, si no se configuran se tomaran valores por defecto:
+   Asegúrate de que las siguientes variables de entorno estén configuradas según el tipo de cliente que deseas probar, si no se configuran se tomaran los siguientes valores por defecto:
 
-   ```bash
-   export CLIENT=kafka       # Puede ser "kafka", "rabbitmq"
-   # Configuración para Kafka
-   export kafka_rate=10000
-   export kafka_increment=1000
-   export kafka_testDuration=2
-   export kafka_messageSize=10240
+    | Nombre       | Descripción                     | Valor por defecto |
+    | ------------ | ------------------------------- | ----------------- |
+    | rate         | Tasa inicial                    | 10000             |
+    | increment    | Incremento                      | 5000               |
+    | testDuration | Duración en segundos            | 2                 |
+    | messageSize  | Tamaño de los mensajes en bytes | 10240             |
+
+  ```bash
+export CLIENT=kafka       # Puede ser "kafka", "rabbitmq" o "both". Valor por defecto "both"
+
+# Configuración para Kafka
+export kafka_rate=500000
+export kafka_increment=500000
+export kafka_testDuration=2
+export kafka_messageSize=10240
    
-   # Configuración para RabbitMQ
-   export rabbitmq_rate=10000
-   export rabbitmq_increment=1000
-   export rabbitmq_testDuration=2
-   export rabbitmq_messageSize=10240
-   export rabbitmq_consumer_testDuration=120
-   
-   ```
-   
+# Configuración para RabbitMQ
+export rabbitmq_rate=500000
+export rabbitmq_increment=500000
+export rabbitmq_testDuration=2
+export rabbitmq_messageSize=10240   
+  ```
+
 2. **Ejecutar el Cliente**:
 
    Desde el directorio `client/`, puedes ejecutar el cliente directamente desde el código fuente si tienes Go instalado:
 
    ```bash
    go run main.go
-   ```
-
-   O, si prefieres utilizar Docker, puedes ejecutar el cliente en un contenedor:
-
-   ```bash
-   docker run --rm \
-     -e CLIENT=kafka \
-     -e HOSTNAME=$(hostname) \
-     -v $(pwd)/config.yaml:/app/config.yaml \
-     benchmark-client
    ```
 
 ---
@@ -532,6 +334,12 @@ Antes de ejecutar el cliente principal, asegúrate de que todos los sistemas ant
 6. **Configurar y Ejecutar el Cliente** (Producer y Consumer) en el puerto `8081` para exponer métricas para Prometheus.
 
 Con este flujo de ejecución y los sistemas configurados en el orden correcto, el cliente estará listo para realizar las pruebas de rendimiento en Kafka y RabbitMQ, mientras que Prometheus recopilará las métricas expuestas para análisis de rendimiento y monitoreo.
+
+## Contribuciones
+
+1. Haz un fork de este repositorio.
+2. Crea una nueva rama (`feature/nueva-funcionalidad`).
+3. Realiza los cambios y crea un pull request.
 
 ### Créditos al autor orginal
 
