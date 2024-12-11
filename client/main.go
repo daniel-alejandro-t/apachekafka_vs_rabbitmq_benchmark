@@ -20,14 +20,11 @@ var (
 func init() {
 	client = os.Getenv("CLIENT")
 	if client == "" {
-		log.Fatalln("You MUST set CLIENT env variable!")
+		client = "both"
 	}
 
 	hostname = "localhost"
-	// hostname = os.Getenv("HOSTNAME")
-	//if client == "" {
-	//	log.Fatalln("You MUST set HOSTNAME env variable!")
-	// }
+
 }
 
 // main is the entry point of the application.
@@ -78,6 +75,7 @@ func runKafkaTest(cfg *utils.Config, hostname string) {
 		}
 	}()
 	kafka.StartProducer(cfg, hostname)
+	kafka.StartConsumer(cfg, hostname)
 }
 
 // FIXME Se detiene - ch.Publish failed: Exception (504) Reason: "channel/connection is not open"

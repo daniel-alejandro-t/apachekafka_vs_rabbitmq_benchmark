@@ -39,9 +39,9 @@ func (Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.C
 }
 
 // Ejemplo de inicialización del consumidor
-func StartConsumer(cfg *utils.Config, hostname string, version sarama.KafkaVersion) {
+func StartConsumer(cfg *utils.Config, hostname string) {
 	config := sarama.NewConfig()
-	config.Version = version
+	// config.Version = version
 	config.Consumer.Return.Errors = true
 
 	ctx := context.Background()

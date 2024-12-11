@@ -237,6 +237,12 @@ func performTestCycle(cfg *utils.Config, hostname string, ch *amqp.Channel, queu
 			if err != nil {
 				utils.Warning(err, "ch.Publish failed")
 				failures++
+
+				// Detectar un error fatal (como pérdida de conexión)
+				if isConnectionError(err) {
+					fmt.Errorf("conexión perdida: %w", err)
+					return latencies, messagesSent, failures
+				}
 			} else {
 				messagesSent++
 				latencies = append(latencies, sendLatency)
@@ -245,6 +251,17 @@ func performTestCycle(cfg *utils.Config, hostname string, ch *amqp.Channel, queu
 	}
 
 	return latencies, messagesSent, failures
+}
+
+func isConnectionError(err error) bool {
+	// Aquí podemos analizar el error y determinar si es un error fatal
+	if amqpErr, ok := err.(*amqp.Error); ok {
+		return amqpErr.Code == 501 || amqpErr.Code == 504
+	}
+	if err != nil && err.Error() == "write: broken pipe" {
+		return true
+	}
+	return false
 }
 
 // logAndRecordMetrics registra las métricas en la salida estándar y en el archivo CSV.
