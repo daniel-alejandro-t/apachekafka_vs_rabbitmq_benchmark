@@ -98,10 +98,10 @@ type BenchmarkParameters struct {
 // con el prefijo 'kafka_' y aplica valores predeterminados si no están establecidas.
 func getBenchmarkParameters() BenchmarkParameters {
 	var (
-		rate         int64 = 100             // Tasa inicial predeterminada
-		increment    int64 = 100             // Incremento predeterminado
-		testDuration       = 5 * time.Second // Duración predeterminada del ciclo
-		messageSize  int   = 1024            // Tamaño predeterminado del mensaje en bytes
+		rate         int64 = 10000           // Tasa inicial predeterminada
+		increment    int64 = 5000            // Incremento predeterminado
+		testDuration       = 2 * time.Second // Duración predeterminada del ciclo
+		messageSize  int   = 10240           // Tamaño predeterminado del mensaje en bytes
 	)
 
 	if val, exists := os.LookupEnv("kafka_rate"); exists {

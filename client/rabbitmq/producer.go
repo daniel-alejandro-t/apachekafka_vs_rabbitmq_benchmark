@@ -4,7 +4,9 @@ import (
 	"encoding/binary"
 	"encoding/csv"
 	"fmt"
+	"math"
 	"os"
+	"sort"
 	"strconv"
 	"time"
 
@@ -23,11 +25,19 @@ type BenchmarkParameters struct {
 
 // MetricsData contiene las métricas recopiladas durante las pruebas
 type MetricsData struct {
-	SendRate     float64
-	MessagesSent int64
-	Failures     int64
-	ElapsedTime  float64
-	// Agrega más campos si deseas recopilar más métricas
+	Rate                 int64
+	MessagesSent         int64
+	Failures             int64
+	DurationSeconds      float64
+	SendRate             float64
+	RequestLatencyP50    float64
+	RequestLatencyP95    float64
+	RequestLatencyP99    float64
+	BatchSizeAvg         float64
+	RecordsPerRequestAvg float64
+	IncomingByteRate     float64
+	OutgoingByteRate     float64
+	RequestsInFlight     int64
 }
 
 // StartProducer inicia el productor de RabbitMQ con incrementos progresivos en la tasa de mensajes.
@@ -36,7 +46,10 @@ func StartProducer(cfg *utils.Config, hostname string) {
 	defer closeProducer(conn, ch)
 
 	headers := []string{
-		"Rate", "MessagesSent", "Failures", "ElapsedTime",
+		"Rate", "MessagesSent", "Failures", "DurationSeconds", "SendRate",
+		"RequestLatencyP50", "RequestLatencyP95", "RequestLatencyP99",
+		"BatchSizeAvg", "RecordsPerRequestAvg", "IncomingByteRate",
+		"OutgoingByteRate", "RequestsInFlight",
 	}
 
 	params := getBenchmarkParameters()
@@ -85,19 +98,18 @@ func closeProducer(conn *amqp.Connection, ch *amqp.Channel) {
 }
 
 // finalizeReportFile guarda los cambios y cierra el archivo CSV.
+// TODO Enviar a utils/ para reutilizar en otros módulos
 func finalizeReportFile(outputFile *os.File, writer *csv.Writer) {
 	writer.Flush()
 	outputFile.Close()
 }
 
-// getBenchmarkParameters lee los parámetros del benchmark desde variables de entorno
-// con el prefijo 'rabbitmq_' y aplica valores predeterminados si no están establecidas.
 func getBenchmarkParameters() BenchmarkParameters {
 	var (
-		rate         int64 = 1000            // Tasa inicial predeterminada
-		increment    int64 = 100             // Incremento predeterminado
-		testDuration       = 5 * time.Second // Duración predeterminada del ciclo
-		messageSize  int   = 1024            // Tamaño predeterminado del mensaje en bytes
+		rate         int64 = 10000
+		increment    int64 = 5000
+		testDuration       = 2 * time.Second
+		messageSize  int   = 10240
 	)
 
 	if val, exists := os.LookupEnv("rabbitmq_rate"); exists {
@@ -140,58 +152,76 @@ func getBenchmarkParameters() BenchmarkParameters {
 	}
 }
 
-// runBenchmark ejecuta las pruebas de incremento progresivo de mensajes enviados.
 func runBenchmark(cfg *utils.Config, hostname string, ch *amqp.Channel, queueName string, writer *csv.Writer) {
-	// Obtener los parámetros del benchmark
 	params := getBenchmarkParameters()
 
 	rate := params.rate
 	for {
-		// Ejecutar el ciclo de prueba
-		messagesSent, failures := performTestCycle(cfg, hostname, ch, queueName, rate, params.testDuration, params.messageSize)
+		latencies, messagesSent, failures := performTestCycle(cfg, hostname, ch, queueName, rate, params.testDuration, params.messageSize)
 
-		// Calcular métricas adicionales si es necesario
+		// Calcular métricas
 		elapsedTime := params.testDuration.Seconds()
 		sendRate := float64(messagesSent) / elapsedTime
 
-		// Crear un objeto MetricsData
+		// Calcular percentiles de latencia
+		p50, p95, p99 := computePercentiles(latencies)
+
+		// En este ejemplo, asumimos:
+		// - Un mensaje por request => BatchSizeAvg = 1
+		// - RecordsPerRequestAvg = 1
+		batchSizeAvg := 1.0
+		recordsPerRequestAvg := 1.0
+
+		// Cálculo de OutgoingByteRate: (messagesSent * messageSize) / elapsedTime
+		outgoingByteRate := float64(messagesSent*int64(params.messageSize)) / elapsedTime
+		// IncomingByteRate: 0 en este escenario, ya que solo producimos
+		incomingByteRate := 0.0
+
+		// RequestsInFlight: asumiendo operaciones sin async
+		requestsInFlight := int64(1)
+
 		metricsData := MetricsData{
-			SendRate:     sendRate,
-			MessagesSent: messagesSent,
-			Failures:     failures,
-			ElapsedTime:  elapsedTime,
-			// Agrega más métricas si lo deseas
+			Rate:                 rate,
+			MessagesSent:         messagesSent,
+			Failures:             failures,
+			DurationSeconds:      elapsedTime,
+			SendRate:             sendRate,
+			RequestLatencyP50:    p50,
+			RequestLatencyP95:    p95,
+			RequestLatencyP99:    p99,
+			BatchSizeAvg:         batchSizeAvg,
+			RecordsPerRequestAvg: recordsPerRequestAvg,
+			IncomingByteRate:     incomingByteRate,
+			OutgoingByteRate:     outgoingByteRate,
+			RequestsInFlight:     requestsInFlight,
 		}
 
-		// Registrar las métricas
-		logAndRecordMetrics(rate, metricsData, writer)
+		logAndRecordMetrics(metricsData, writer)
 
-		// Verificar si se encontraron fallos
 		if failures > 0 {
 			fmt.Printf("Fallo detectado a %d msg/s. Finalizando prueba.\n", rate)
 			break
 		}
 
-		fmt.Print("Esperando " + fmt.Sprintf("%.2f", elapsedTime) + " segundos para la siguiente prueba...\n")
-
+		fmt.Printf("Esperando %.2f segundos para la siguiente prueba...\n", elapsedTime)
 		rate += params.increment
 	}
 
-	fmt.Printf("Prueba finalizada. Resultados guardados en rabbitmq_producer_report.csv\n")
+	fmt.Printf("Prueba finalizada.\n")
 }
 
-// performTestCycle ejecuta un ciclo de prueba con una tasa de mensajes específica.
-func performTestCycle(cfg *utils.Config, hostname string, ch *amqp.Channel, queueName string, rate int64, testDuration time.Duration, messageSize int) (messagesSent int64, failures int64) {
+func performTestCycle(cfg *utils.Config, hostname string, ch *amqp.Channel, queueName string, rate int64, testDuration time.Duration, messageSize int) (latencies []float64, messagesSent int64, failures int64) {
 	startTime := time.Now()
 	endTime := startTime.Add(testDuration)
 	ticker := time.NewTicker(time.Second / time.Duration(rate))
 	defer ticker.Stop()
 
-	fmt.Print("Iniciando prueba con tasa de ", rate, " msg/s\n")
+	fmt.Printf("Iniciando prueba con tasa de %d msg/s\n", rate)
 
 	for time.Now().Before(endTime) {
 		select {
 		case <-ticker.C:
+			sendStart := time.Now()
 			err := ch.Publish(
 				"",        // exchange
 				queueName, // routing key
@@ -203,30 +233,52 @@ func performTestCycle(cfg *utils.Config, hostname string, ch *amqp.Channel, queu
 				},
 			)
 
+			sendLatency := time.Since(sendStart).Seconds() * 1000.0 // latencia en ms
 			if err != nil {
 				utils.Warning(err, "ch.Publish failed")
-				failures++ // Incrementar el contador de fallos
+				failures++
 			} else {
-				messagesSent++ // Incrementar el contador de mensajes enviados
+				messagesSent++
+				latencies = append(latencies, sendLatency)
 			}
-
 		}
 	}
 
-	return messagesSent, failures
+	return latencies, messagesSent, failures
 }
 
 // logAndRecordMetrics registra las métricas en la salida estándar y en el archivo CSV.
-func logAndRecordMetrics(rate int64, metricsData MetricsData, writer *csv.Writer) {
-	fmt.Printf("Tasa: %d msg/s, Enviados: %d, Fallos: %d, Tiempo: %.2f s, Tasa de envío real: %.2f msg/s\n",
-		rate, metricsData.MessagesSent, metricsData.Failures, metricsData.ElapsedTime, metricsData.SendRate)
+func logAndRecordMetrics(metricsData MetricsData, writer *csv.Writer) {
+	fmt.Printf("Rate: %d msg/s, MessagesSent: %d, Failures: %d, DurationSeconds: %.2f, SendRate: %.2f, P50: %.2f ms, P95: %.2f ms, P99: %.2f ms, BatchSizeAvg: %.2f, RecordsPerRequestAvg: %.2f, IncomingByteRate: %.2f, OutgoingByteRate: %.2f, RequestsInFlight: %d\n",
+		metricsData.Rate,
+		metricsData.MessagesSent,
+		metricsData.Failures,
+		metricsData.DurationSeconds,
+		metricsData.SendRate,
+		metricsData.RequestLatencyP50,
+		metricsData.RequestLatencyP95,
+		metricsData.RequestLatencyP99,
+		metricsData.BatchSizeAvg,
+		metricsData.RecordsPerRequestAvg,
+		metricsData.IncomingByteRate,
+		metricsData.OutgoingByteRate,
+		metricsData.RequestsInFlight,
+	)
 
 	record := []string{
-		strconv.FormatInt(rate, 10),
+		strconv.FormatInt(metricsData.Rate, 10),
 		strconv.FormatInt(metricsData.MessagesSent, 10),
 		strconv.FormatInt(metricsData.Failures, 10),
-		fmt.Sprintf("%.2f", metricsData.ElapsedTime),
-		// Agrega más campos si has añadido más métricas
+		fmt.Sprintf("%.2f", metricsData.DurationSeconds),
+		fmt.Sprintf("%.2f", metricsData.SendRate),
+		fmt.Sprintf("%.2f", metricsData.RequestLatencyP50),
+		fmt.Sprintf("%.2f", metricsData.RequestLatencyP95),
+		fmt.Sprintf("%.2f", metricsData.RequestLatencyP99),
+		fmt.Sprintf("%.2f", metricsData.BatchSizeAvg),
+		fmt.Sprintf("%.2f", metricsData.RecordsPerRequestAvg),
+		fmt.Sprintf("%.2f", metricsData.IncomingByteRate),
+		fmt.Sprintf("%.2f", metricsData.OutgoingByteRate),
+		strconv.FormatInt(metricsData.RequestsInFlight, 10),
 	}
 	writer.Write(record)
 	writer.Flush()
@@ -244,4 +296,33 @@ func generateMessage(size int) []byte {
 		message[i] = byte('A' + (i % 26))
 	}
 	return message
+}
+
+// computePercentiles calcula P50, P95, P99
+func computePercentiles(latencies []float64) (p50, p95, p99 float64) {
+	if len(latencies) == 0 {
+		return 0, 0, 0
+	}
+	sort.Float64s(latencies)
+
+	p50 = percentile(latencies, 50)
+	p95 = percentile(latencies, 95)
+	p99 = percentile(latencies, 99)
+
+	return p50, p95, p99
+}
+
+// percentile obtiene el valor del percentil sobre un slice ordenado
+func percentile(data []float64, p float64) float64 {
+	if len(data) == 0 {
+		return 0.0
+	}
+	index := (p / 100.0) * float64(len(data)-1)
+	i := int(math.Floor(index))
+	j := int(math.Ceil(index))
+	if i == j {
+		return data[i]
+	}
+	frac := index - float64(i)
+	return data[i]*(1-frac) + data[j]*frac
 }
